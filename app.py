@@ -752,12 +752,14 @@ def render_interactive_3d_scene(light: dict[str, Any], height: int = 430) -> Non
         <div style="font-weight:650;color:#222;">3D配置ビュー</div>
         <div style="font-size:12px;color:#555;">ドラッグで回転 / ホイールで拡大縮小</div>
       </div>
-      <canvas id="scene3d" width="920" height="__CANVAS_HEIGHT__" style="width:100%;height:__CANVAS_HEIGHT__px;border:1px solid #d4d0c8;border-radius:12px;background:#f7f5ef;display:block;"></canvas>
+      <canvas id="scene3d" width="920" height="430" style="width:100%;height:clamp(240px,32vw,__CANVAS_HEIGHT__px);border:1px solid #d4d0c8;border-radius:12px;background:#f7f5ef;display:block;"></canvas>
     </div>
     <script>
     const scene = __SCENE__;
     const canvas = document.getElementById("scene3d");
     const ctx = canvas.getContext("2d");
+    let viewWidth = 920;
+    let viewHeight = 430;
     let yaw = -0.72;
     let pitch = 0.48;
     let zoom = 4.1;
@@ -794,9 +796,10 @@ def render_interactive_3d_scene(light: dict[str, Any], height: int = 430) -> Non
     function project(point) {
       const r = rotate(point);
       const perspective = 1 / (1 + (r.z + 140) / 520);
+      const responsiveScale = Math.max(0.46, Math.min(1.2, Math.min(viewWidth / 920, viewHeight / 430)));
       return {
-        x: canvas.width / 2 + r.x * zoom * perspective,
-        y: canvas.height / 2 - r.y * zoom * perspective,
+        x: viewWidth / 2 + r.x * zoom * responsiveScale * perspective,
+        y: viewHeight / 2 - r.y * zoom * responsiveScale * perspective,
         z: r.z,
         p: perspective
       };
@@ -907,7 +910,7 @@ def render_interactive_3d_scene(light: dict[str, Any], height: int = 430) -> Non
     }
 
     function render() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, viewWidth, viewHeight);
       drawGround();
       lights.forEach((item, index) => drawBeam(item, index));
       drawBox({ x: subject.x, y: subject.y, z: subject.z }, subject, "rgba(208,208,203,0.82)", "#222");
@@ -957,7 +960,24 @@ def render_interactive_3d_scene(light: dict[str, Any], height: int = 430) -> Non
       render();
     }, { passive: false });
 
-    render();
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      viewWidth = Math.max(1, rect.width);
+      viewHeight = Math.max(1, rect.height);
+      const nextWidth = Math.round(viewWidth * dpr);
+      const nextHeight = Math.round(viewHeight * dpr);
+      if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      render();
+    }
+
+    const resizeObserver = new ResizeObserver(resizeCanvas);
+    resizeObserver.observe(canvas);
+    resizeCanvas();
     </script>
     """.replace("__SCENE__", scene_json).replace("__CANVAS_HEIGHT__", str(height))
     components.html(html, height=height + 55)
